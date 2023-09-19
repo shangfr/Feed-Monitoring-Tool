@@ -73,23 +73,3 @@ if __name__ == '__main__':
 
 
     push_report(web_hook, info, at_all=False)
-
-async def check_rss(html, keywords='科技|技术', contents=['title']):
-    import re
-    rss_web = feedparser.parse(html)
-    web_name = rss_web.feed.title
-    news = []
-    for entry in rss_web['entries']:
-        for cn in contents:
-            if re.search(keywords, entry[cn]):
-                news.append({"web":web_name,'title': entry['title'], 'link': entry['link'],
-                             'summary': entry['summary'], 'published': entry['published']})
-
-    return news
-
-
-
-all_parsed_whois = []  # make a global
-
-async def coro():
-    all_parsed_whois.append(await check_rss("https://i.scnu.edu.cn/sub"))
