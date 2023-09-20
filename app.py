@@ -22,17 +22,29 @@ button {
     padding-top: 10px !important;
     padding-bottom: 10px !important;
 }
+
+h2 {text-align: center;}
+img {width: 100%;height: 100%;}
 </style>
 """, unsafe_allow_html=True)
 
 
 def start_stop(flag):
     st.session_state.run = flag
+    if flag:
+        st.toast('Start!', icon='🚗')
+    else:
+        st.toast('Stop!', icon='⛔️')
 
 
 def clear_reset():
     st.session_state['feeds'] = []
     st.session_state.run = False
+    st.toast('Reset!', icon='🆑')
+
+
+def update_dt():
+    st.toast('Data Update!', icon='🔁')
 
 
 if 'feeds' not in st.session_state:
@@ -52,17 +64,17 @@ with st.sidebar:
 
 cola, colb = st.columns([1, 9])
 
-tab0, tab1 = colb.tabs(["📈 状态", "🗃 详情"])
+tab0, tab1, tab2 = colb.tabs(["📈 状态", "🗃 详情", "🤖 推送"])
 
 with cola:
     st.markdown('')
     st.markdown('')
     st.button('🚗', on_click=start_stop, kwargs={
-              'flag': True}, disabled=st.session_state.run,help="开始")
+              'flag': True}, disabled=st.session_state.run, help="开始")
     st.button('⛔️', on_click=start_stop, kwargs={
               'flag': False}, disabled=not st.session_state.run)
     st.button('🆑', on_click=clear_reset, disabled=st.session_state.run)
-    st.button('🔁', disabled=not st.session_state.run)
+    st.button('🔁', on_click=update_dt, disabled=not st.session_state.run)
 
 with tab0.expander("Stats", expanded=True):
     placeholder0 = st.empty()
@@ -111,7 +123,32 @@ with tab1:
                          )
                      }, use_container_width=True, hide_index=True)
     else:
-        st.write("👈 `启动`🚗后，点击`更新`🔁按钮查看最新数据。")
+        st.info("👈 启动🚗后，点击更新🔁按钮查看最新数据。")
+
+
+with tab2:
+    from feishu import push_report
+    colx0, colx1, colx2, colx3, colx4, colx5 = st.columns(6)
+    parms = {"title": colx0.toggle("标题",value=True),
+             "summary": colx1.toggle("摘要",value=True),
+             "link": colx2.toggle("链接",value=True),
+             "published": colx3.toggle("日期",value=True),
+             "web": colx4.toggle("网站"),
+             "at_all": colx5.toggle("@ALL")}
+    
+    tlt_lst = [t['title'] for t in st.session_state['feeds']]
+    if tlt := st.selectbox('选择消息', tlt_lst):
+        info = st.session_state['feeds'][tlt_lst.index(tlt)]
+        with st.expander(f"{info['web']} [查看详情]({info['link']})"):
+            st.markdown(f"{info['summary']}", unsafe_allow_html=True)
+
+    if web_hook := st.text_input("推送地址", ""):
+        # Every form must have a submit button.
+        submitted = st.button("发送", type="primary", use_container_width=True)
+    
+        if submitted:
+            push_report(web_hook, info, parms)
+            st.success("消息发送成功！")
 
 
 loop = asyncio.new_event_loop()

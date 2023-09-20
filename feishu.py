@@ -6,12 +6,12 @@ Created on Wed Sep 13 10:15:46 2023
 """
 import requests
 
-def push_report(web_hook, info, at_all=False):
+def push_report(web_hook, info, parms):
     
-    if len(info['summary'])>3000:
-        info['summary'] = info['summary'][:3000]
+    if len(info['summary'])>500:
+        info['summary'] = info['summary'][:500]+'......'
         
-    if at_all:
+    if parms['at_all']:
         info['summary'] = info['summary']+"<at id=all></at>"
 
     header = {
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     web_hook = "https://open.feishu.cn/open-apis/bot/v2/hook/b578df38-bd4a-4257-84bd-3c69920edfa8"
 
     import feedparser 
-    rss_web = feedparser.parse("https://i.scnu.edu.cn/sub")
+    rss_web = feedparser.parse("https://36kr.com/feed-newsflash")
     rss_web.version
     from utils import rss2dict
     info = rss2dict(rss_web)['feeds'][0]
