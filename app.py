@@ -54,11 +54,11 @@ if 'feeds' not in st.session_state:
 
 with st.sidebar:
     rss_txt = st.text_area(
-        'Feed', '''https://36kr.com/feed-newsflash\nhttps://www.zhihu.com/rss''')
+        'Feed', '''https://36kr.com/feed-newsflash\nhttps://www.zhihu.com/rss\nhttps://rss.shab.fun/cctv/world''', help = 'https://github.com/shangfr/Feed-Monitoring-Tool')
     kw_txt = st.text_input('关键词', '科技 风险 绿色')
     contents = st.multiselect('监控内容', ['title', 'summary'], 'title')
-    feedurls = rss_txt.split("\n")
-    keywords = kw_txt.split(" ")
+    feedurls = [t for t in rss_txt.split("\n") if t]
+    keywords = [t for t in kw_txt.split(" ") if t]
 
     INTERVAL = st.number_input('时间间隔(s)', 5, step=5)
 
@@ -88,7 +88,6 @@ parm_dict = {"feeds": st.session_state['feeds'],
              "contents": contents
              }
 st_show = [placeholder0, placeholder1, placeholder2]
-
 feeds_num = len(st.session_state['feeds'])
 placeholder0.progress(feeds_num % 100, text=f"📝 匹配到`{feeds_num}`条信息")
 placeholder1.info("**关键词**：" + kw_txt +
@@ -135,10 +134,10 @@ with tab2:
              "published": colx3.toggle("日期",value=True),
              "web": colx4.toggle("网站"),
              "at_all": colx5.toggle("@ALL")}
-    
-    tlt_lst = [t['title'] for t in st.session_state['feeds']]
+    feeds = st.session_state['feeds']
+    tlt_lst = [t['title'] for t in feeds]
     if tlt := st.selectbox('选择消息', tlt_lst):
-        info = st.session_state['feeds'][tlt_lst.index(tlt)]
+        info = feeds[tlt_lst.index(tlt)]
         with st.expander(f"{info['web']} [查看详情]({info['link']})"):
             st.markdown(f"{info['summary']}", unsafe_allow_html=True)
 
@@ -154,3 +153,4 @@ with tab2:
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 loop.run_until_complete(fetchfeeds(st.session_state.run, parm_dict, st_show))
+st.stop()

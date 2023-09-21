@@ -72,7 +72,7 @@ finally:
     
 from utils import fetchfeeds    
 feeds = []
-feedurls = ['https://36kr.com/feed-newsflash','https://www.zhihu.com/rss']
+feedurls = ['https://36kr.com/feed-newsflash','https://rss.shab.fun/cctv/world']
 keywords = ['科技','股市','风险','新闻','消息','大']
 contents = ['title', 'summary']
 parm_dict = {"feeds":feeds,
