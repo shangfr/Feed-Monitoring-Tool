@@ -7,7 +7,7 @@ Created on Wed Sep 13 18:00:28 2023
 
 import asyncio
 import streamlit as st
-
+from html_parser import clean_url
 from utils import fetchfeeds, pd_func
 
 
@@ -55,9 +55,9 @@ if 'feeds' not in st.session_state:
 with st.sidebar:
     rss_txt = st.text_area(
         'Feed', '''https://36kr.com/feed-newsflash\nhttps://www.zhihu.com/rss\nhttps://rss.shab.fun/cctv/world''', help = 'https://github.com/shangfr/Feed-Monitoring-Tool')
-    kw_txt = st.text_input('关键词', '科技 风险 绿色')
+    kw_txt = st.text_input('关键词', '科技 风险 绿色', help="使用空格分割")
     contents = st.multiselect('监控内容', ['title', 'summary'], 'title')
-    feedurls = [t for t in rss_txt.split("\n") if t]
+    feedurls = [clean_url(t) for t in rss_txt.replace(" ", "").split("\n") if t]
     keywords = [t for t in kw_txt.split(" ") if t]
 
     INTERVAL = st.number_input('时间间隔(s)', 5, step=5)
