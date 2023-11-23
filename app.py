@@ -11,9 +11,9 @@ from html_parser import clean_url
 from utils import fetchfeeds, pd_func
 
 
-st.set_page_config(page_title="监控APP", layout="wide")
+st.set_page_config(page_title="监控APP", layout="wide", page_icon="🚗")
 
-st.title('🎙️ 资讯实时监控')
+st.title('🚗 资讯实时监控')
 st.markdown(
     """
 <style>
@@ -57,10 +57,10 @@ with st.sidebar:
     search = st.toggle('Feed or Search', help="Feed: 推送源  Search:搜索")
     if search:
         feedurls = []
-        st.info("启动关键词定时搜索")
+        st.success("👉点击🚗启动关键词定时搜索")
 
     else:
-        st.info("输入Feed源")
+        st.info("👇输入Feed源，👉点击🚗启动")
         rss_txt = st.text_area(
             'Feed', '''https://36kr.com/feed-newsflash\nhttps://www.zhihu.com/rss\nhttps://rss.shab.fun/cctv/world''', help='https://github.com/shangfr/Feed-Monitoring-Tool')
 
@@ -69,6 +69,11 @@ with st.sidebar:
     kw_txt = st.text_input('关键词', '科技 风险 绿色', help="使用空格分割")
     contents = st.multiselect('监控内容', ['title', 'summary'], 'title')
     INTERVAL = st.number_input('时间间隔(s)', 5, step=5)
+
+    using_llm = st.toggle('LLM Monitoring', help="使用大模型进行内容监控")
+    if using_llm:
+        st.success("👇🤖 启动LLM Monitoring [Agent](https://github.com/shangfr/MRKL-AgentBot)")
+
 
 cola, colb = st.columns([1, 9])
 
@@ -158,13 +163,13 @@ with tab2:
         with st.expander(f"{info['web']} [查看详情]({info['link']})"):
             st.markdown(f"{info['summary']}", unsafe_allow_html=True)
 
-    if web_hook := st.text_input("推送地址", ""):
-        # Every form must have a submit button.
-        submitted = st.button("发送", type="primary", use_container_width=True)
-
-        if submitted:
-            push_report(web_hook, info, parms)
-            st.success("消息发送成功！")
+        if web_hook := st.text_input("推送地址", ""):
+            # Every form must have a submit button.
+            submitted = st.button("发送", type="primary", use_container_width=True)
+    
+            if submitted:
+                push_report(web_hook, info, parms)
+                st.success("消息发送成功！")
 
 
 loop = asyncio.new_event_loop()
