@@ -9,7 +9,7 @@ import asyncio
 import streamlit as st
 from html_parser import get_docs, aload
 
-st.title('📖 网页解析监控[Playwright](https://playwright.dev/python/)')
+st.title('📖 网页解析监控')
 
 @st.cache_data
 def parser_urls(url):
@@ -22,8 +22,10 @@ with st.sidebar:
     url = st.text_area(
         'URL', '''https://www.susallwave.com\nhttps://www.163.com/dy/article''', help='https://github.com/shangfr/Feed-Monitoring-Tool')
     
-    on = st.toggle('Activate playwright')
-    
+    cola,colb = st.columns([2,1])
+    on = cola.toggle('Activate playwright')
+    colb.caption("了解[Playwright](https://playwright.dev/python/)")
+
     if url:
         if st.button("获取网页"):
             links = url.strip().replace(" ", "").split("\n")

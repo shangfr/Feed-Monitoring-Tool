@@ -10,14 +10,48 @@ import async_timeout
 import asyncio
 import aiohttp
 
+from duckduckgo_search import AsyncDDGS
+
+def sanitize_keywords(keywords):
+    keywords = (
+        keywords.strip()
+        .replace("filetype", "")
+        .replace(":", "")
+        .replace('"', "'")
+        .replace("site", "")
+        .replace(" ", "|")
+        .replace("/", "_")
+        .replace("\\", "_")
+        .replace(" ", "")
+    )
+    return keywords
+
+def rename_dict(my_dict):
+
+    replace_dict = {'date': 'published', 'source': 'web',
+                    'body': 'summary', 'url': 'link'}
+    for old_key, new_key in replace_dict.items():
+        my_dict[new_key] = my_dict.pop(old_key)
+
+    return my_dict
+
+
+async def get_results(parm_dict):
+    keywords = parm_dict['keywords']  # .strip().replace(" ","|")
+    async with AsyncDDGS() as ddgs:
+        async for info_dict in ddgs.news(keywords):
+            rdict = rename_dict(info_dict)
+            if rdict not in parm_dict['feeds']:
+                parm_dict['feeds'].append(rdict)
+
 
 async def check_rss(html, parm_dict):
-
+    keywords = parm_dict['keywords']
     rss_data = feedparser.parse(html)
     feedslist = feed2dict(rss_data)
     for info_dict in feedslist:
         for cn in parm_dict['contents']:
-            if re.search(parm_dict['keywords'], info_dict[cn]):
+            if re.search(keywords, info_dict[cn]):
                 if info_dict not in parm_dict['feeds']:
                     parm_dict['feeds'].append(info_dict)
                     break
@@ -36,17 +70,10 @@ async def fetchfeeds(run, parm_dict, st_show=[]):
 
     seconds = 0
     INTERVAL = 5
-
+    parm_dict['keywords'] = sanitize_keywords(parm_dict['keywords'])
     while run:
-
-        for url in parm_dict['feedurls']:
-            async with aiohttp.ClientSession() as session:
-                html = await fetch(session, url)
-                if html:
-                    await check_rss(html, parm_dict)
-                else:
-                    url = " Error 😭 解析错误 "+url
-
+        if not parm_dict['feedurls']:
+            await get_results(parm_dict)
             if st_show:
                 feeds_num = len(parm_dict['feeds'])
                 titles = "- "+"\n\n- ".join([f"{info['web']} [{info['title']}]({info['link']})"
@@ -54,8 +81,26 @@ async def fetchfeeds(run, parm_dict, st_show=[]):
 
                 st_show[0].progress(feeds_num %
                                     100, text=f"📝 匹配到`{feeds_num}`条信息")
-                st_show[1].success(f"⏳ Parsing {url}")
+                st_show[1].success(f"⏳ Search {parm_dict['keywords']}")
                 st_show[2].success(titles)
+        else:
+            for url in parm_dict['feedurls']:
+                async with aiohttp.ClientSession() as session:
+                    html = await fetch(session, url)
+                    if html:
+                        await check_rss(html, parm_dict)
+                    else:
+                        url = " Error 😭 解析错误 "+url
+
+                if st_show:
+                    feeds_num = len(parm_dict['feeds'])
+                    titles = "- "+"\n\n- ".join([f"{info['web']} [{info['title']}]({info['link']})"
+                                                for info in parm_dict['feeds'][-3:]])
+
+                    st_show[0].progress(feeds_num %
+                                        100, text=f"📝 匹配到`{feeds_num}`条信息")
+                    st_show[1].success(f"⏳ Parsing {url}")
+                    st_show[2].success(titles)
 
         seconds = seconds + INTERVAL
         await asyncio.sleep(INTERVAL)
@@ -125,18 +170,19 @@ def pd_func(feeds):
     del df['summary']
 
     def date_cnt(srs):
-        return srs.value_counts().tolist()
+        cnt = srs.value_counts().tolist()
+        cnt.insert(0, 0)
+        cnt.insert(0, 0)
+        return cnt
 
     dfa = df.groupby('web').agg(
         {"title": "count", "date": date_cnt}).reset_index()
 
     dfa.columns = ['web', 'title', 'match_history']
+    srs_max = dfa['match_history'].tolist()
+    maxv = max(max(srs_max))+1
 
-    srs_max = dfa['match_history']
-    for i in range(len(srs_max)):
-        srs_max = max(srs_max)
-
-    return df, dfa, srs_max
+    return df, dfa, maxv
 
 
 def feed2dict(rss_data):
