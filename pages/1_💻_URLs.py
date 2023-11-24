@@ -12,55 +12,62 @@ from html_parser import get_docs, aload
 st.title('📖 网页解析监控')
 
 @st.cache_data
-def parser_urls(url):
-    return get_docs(url)
+def parser_urls(urls,inner):
+    output = []
+    for url in urls: 
+        output.extend(get_docs(url,inner))
+    return output
 
 if 'html' not in st.session_state:
+    st.session_state['urls'] = set(["https://www.susallwave.com"])
     st.session_state['html'] = []
-    st.session_state['urls'] = []
-with st.sidebar:
-    url = st.text_area(
-        'URL', '''https://www.susallwave.com\nhttps://www.163.com/dy/article''', help='https://github.com/shangfr/Feed-Monitoring-Tool')
-    
-    cola,colb = st.columns([2,1])
-    on = cola.toggle('Activate playwright')
-    colb.caption("了解[Playwright](https://playwright.dev/python/)")
+    st.session_state['url_text'] = "https://www.susallwave.com"
 
-    if url:
-        if st.button("获取网页"):
-            links = url.strip().replace(" ", "").split("\n")
-            links = list(set(links))
-            
-            if on:
-                st.session_state['urls'] = links
-            else:
-                docs = []
-                for u in links:    
-                    docs.extend(parser_urls(u))
-                    
-                st.session_state['html'] = docs
-                st.session_state['urls'] = [dt["metadata"]["source"] for dt in docs]
-        
+def get_links():
+    links = st.session_state['url_text'].strip().replace(" ", "").split("\n")
+    links = [k for k in links if len(k)>5]
+    if links:
+        st.session_state['urls'] = st.session_state['urls'].union(set(links))
+
+with st.sidebar:
+    with st.expander("编辑URL"):
+        url = st.text_area(
+            'URL',key="url_text",on_change=get_links, help='https://github.com/shangfr/Feed-Monitoring-Tool')
+
+    if st.session_state['urls']:    
         urls = st.session_state['urls']
         options = st.multiselect(
             'URL选择',
             urls, urls)
+        
+        
+        on = st.toggle('Activate playwright',value=True)
+        inner = st.toggle('Analyze internal links',value=True)
 
-        st.caption("Starting load HTML documents from a list of URLs…")
-
-        if st.button("解析网页"):
+        st.caption("Starting load HTML documents from a list of URLs…了解[Playwright](https://playwright.dev/python/)")
+        cola,colb = st.columns([2,1])
+        if options and cola.button("解析网页", use_container_width=True):
             if on:
                 loop = asyncio.ProactorEventLoop()
                 asyncio.set_event_loop(loop)
-                st.session_state['html'] = loop.run_until_complete(aload(urls))
+                st.session_state['html'].extend(loop.run_until_complete(aload(options,inner=inner)))
             else:
+                st.session_state['html'].extend(parser_urls(options,inner=inner))
+
                 st.info("解析已完成！")
-                
+
+        if colb.button("清空", use_container_width=True):
+            st.cache_data.clear()
+            st.session_state['urls'] = set()
+            st.session_state['html'] = []
+            st.toast('Reset!', icon='🆑')
+
 
 html = st.session_state['html']
 results = []
 
 if html:
+    
     col0, col1 = st.columns([5, 1])
     color = col1.color_picker('关键词标记', '#00f900')
     kw_txt = col0.text_input('关键词筛选', '科技 风险 绿色', help="使用空格分割")
@@ -80,4 +87,7 @@ if results:
     with st.expander("查看"):
         st.markdown(htm['page_content'], unsafe_allow_html=True)
 else:
-    st.warning("无")
+    st.info("👈1. 编辑URL; \n\n👈2. 选择要解析的URL; \n\n👈3. 点击解析按钮。")
+    
+
+    

@@ -33,39 +33,46 @@ def clean_url(url):
                           parsed_url.netloc, parsed_url.path)
     return cleaned_url.rstrip('/')
 
-
-def get_docs(url):
+def parser_links(url, content):
     
+    soup = BeautifulSoup(content, "html.parser")
+    #url = soup.find("base")["href"]
+    text = soup.get_text()
+    all_links = soup.find_all('a')
+    # 查找所有的<a>标签
+    internal_links = []
+    for a in all_links:
+        if 'href' in a.attrs:
+            if a['href'].startswith(url):
+                internal_links.append(a)
+            elif a['href'].startswith("/"):
+                internal_links.append(url+a['href'])
+
+    return text,list(set(internal_links))
+
+def get_web_content(url):
     url = clean_url(url)
     response = requests.get(url)
-    internal_links = []
-    docs = []
-    # 检查请求是否成功
     if response.status_code == 200:
-        # 使用BeautifulSoup解析网页内容
-        soup = BeautifulSoup(response.text, 'html.parser')
-        text = soup.get_text()
-        docs.append(dict(page_content=text.strip(), metadata={"source": url}))
-        
-        # 查找所有的<a>标签
-        all_links = soup.find_all('a')
-        for a in all_links:
-            if 'href' in a.attrs:
-                if a['href'].startswith(url):
-                    internal_links.append(a)
-                elif a['href'].startswith("/"):
-                    internal_links.append(url+a['href'])
-        
-        internal_links = list(set(internal_links))
-        for link in internal_links:
-            target_response = requests.get(link)
-            target_content = target_response.content
-            target_soup = BeautifulSoup(target_content, 'html.parser')
-            target_text = target_soup.get_text()
-            docs.append(dict(page_content=target_text.strip(), metadata={"source": link}))
-        # 输出所有内部链接
+        content = response.text
+        return parser_links(url, content)
     else:
         print(f"请求失败，状态码：{response.status_code}")
+        return None,None
+   
+    
+def get_docs(url,inner=False):
+    
+    docs = []
+    text,internal_links = get_web_content(url)
+    if text is not None:
+        docs.append(dict(page_content=text.strip(), metadata={"source": url}))
+        if inner:
+            if len(internal_links)>5:
+                internal_links = internal_links[:5]
+            for link in internal_links:
+                target_text, _ = get_web_content(url)
+                docs.append(dict(page_content=target_text.strip(), metadata={"source": link}))
 
     return docs
 
@@ -86,8 +93,7 @@ class UnstructuredHtmlEvaluator():
         self.remove_selectors = remove_selectors
 
     async def evaluate_async(
-        self, page: "AsyncPage", browser: "AsyncBrowser", response: "AsyncResponse"
-    ) -> str:
+        self, page: "AsyncPage", browser: "AsyncBrowser", response: "AsyncResponse", url:str) -> (str,list):
         """Asynchronously process the HTML content of the page."""
         from unstructured.partition.html import partition_html
 
@@ -98,11 +104,13 @@ class UnstructuredHtmlEvaluator():
                     await element.evaluate("element => element.remove()")
 
         page_source = await page.content()
-        elements = partition_html(text=page_source)
-        return "\n\n".join([str(el) for el in elements])
+        return parser_links(url, page_source)
+        
+        #elements = partition_html(text=page_source)
+        #return "\n\n".join([str(el) for el in elements])
 
 
-async def aload(urls, remove_selectors=["header", "footer"]):
+async def aload(urls, remove_selectors=[], inner=False):
     """Load the specified URLs with Playwright and create Documents asynchronously.
     Use this function when in a jupyter notebook environment.
 
@@ -116,6 +124,7 @@ async def aload(urls, remove_selectors=["header", "footer"]):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         for url in urls:
+            url = clean_url(url)
             try:
                 page = await browser.new_page()
                 response = await page.goto(url)
@@ -123,9 +132,23 @@ async def aload(urls, remove_selectors=["header", "footer"]):
                     raise ValueError(
                         f"page.goto() returned None for url {url}")
 
-                text = await evaluator.evaluate_async(page, browser, response)
+                text,internal_links = await evaluator.evaluate_async(page, browser, response, url)
                 metadata = {"source": url}
                 docs.append(dict(page_content=text.strip(), metadata=metadata))
+                
+                if inner:
+                    evaluator = UnstructuredHtmlEvaluator(["header", "footer"])
+                    if len(internal_links)>5:
+                        internal_links = internal_links[:5]
+                    for link in internal_links:
+                        response = await page.goto(link)
+                        if response is None:
+                            raise ValueError(
+                                f"page.goto() returned None for url {link }")
+    
+                        text,_ = await evaluator.evaluate_async(page, browser, response, link)
+                        metadata = {"source": link }
+                        docs.append(dict(page_content=text.strip(), metadata=metadata))
             except Exception as e:
                 logger.error(
                     f"Error fetching or processing {url}, exception: {e}"
