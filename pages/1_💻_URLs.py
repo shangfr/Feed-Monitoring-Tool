@@ -19,9 +19,9 @@ def parser_urls(urls,inner):
     return output
 
 if 'html' not in st.session_state:
-    st.session_state['urls'] = set(["https://www.susallwave.com"])
+    st.session_state['urls'] = set(["https://open.bigmodel.cn"])
     st.session_state['html'] = []
-    st.session_state['url_text'] = "https://www.susallwave.com"
+    st.session_state['url_text'] = "https://open.bigmodel.cn"
 
 def get_links():
     links = st.session_state['url_text'].strip().replace(" ", "").split("\n")

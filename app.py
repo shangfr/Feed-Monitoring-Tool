@@ -73,7 +73,7 @@ with st.sidebar:
     using_llm = st.toggle('LLM Monitoring', help="使用大模型进行内容监控")
     if using_llm:
         st.success("👇🤖 启动LLM Monitoring [Agent](https://github.com/shangfr/MRKL-AgentBot)")
-
+        _ = st.text_area('监控需求', '请监控人工智能相关的新闻舆情', help="语言描述监控需求")
 
 cola, colb = st.columns([1, 9])
 
