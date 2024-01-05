@@ -1,21 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Sep 13 18:00:28 2023
+Created on Mon Dec 25 11:01:26 2023
 
 @author: shangfr
 """
-
 import asyncio
 import streamlit as st
-from html_parser import clean_url
-from utils import fetchfeeds, pd_func
+from collections import defaultdict
 
 
-st.set_page_config(page_title="监控APP", layout="wide", page_icon="🚗")
+st.set_page_config(page_title="网络信息监控APP", layout="wide", page_icon="👨‍💻")
 
-st.title('🚗 资讯实时监控')
-st.markdown(
-    """
+st.write('''
 <style>
 button {
     height: auto;
@@ -23,156 +19,171 @@ button {
     padding-bottom: 10px !important;
 }
 
-h2 {text-align: center;}
-img {width: 100%;height: 100%;}
-</style>
-""", unsafe_allow_html=True)
+[data-testid="column"] {
+    width: calc(20% - 1rem) !important;
+    flex: 1 1 calc(20% - 1rem) !important;
+    min-width: calc(20% - 1rem) !important;
+}
+</style>''', unsafe_allow_html=True)
 
 
-def start_stop(flag):
-    st.session_state.run = flag
-    if flag:
-        st.toast('Start!', icon='🚗')
-    else:
-        st.toast('Stop!', icon='⛔️')
+st.title('👨‍💻Feed订阅信息实时监控')
+
+@st.cache_data
+def agent(prompt = ''):
+
+    return ""
+
+import redis
+
+pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
+r = redis.Redis(connection_pool=pool)
 
 
-def clear_reset():
-    st.session_state['feeds'] = []
-    st.session_state.run = False
-    st.toast('Reset!', icon='🆑')
-
-
-def update_dt():
-    st.toast('Data Update!', icon='🔁')
-
-
-if 'feeds' not in st.session_state:
-    st.session_state['feeds'] = []
-    st.session_state.run = False
+news_url = r.lrange("news_count", 0, -1)[::2]
+news_cnt = r.lrange("news_count", 0, -1)[1::2]
+news_cnt = [int(x) for x in news_cnt]
+urls = list(set(news_url))
+total = sum(news_cnt)
 
 
 with st.sidebar:
+   #st.info("👉点击🚗启动监控程序")
 
-    search = st.toggle('Feed or Search', help="Feed: 推送源  Search:搜索")
-    if search:
-        feedurls = []
-        st.success("👉点击🚗启动关键词定时搜索")
-
-    else:
-        st.info("👇输入Feed源，👉点击🚗启动")
-        rss_txt = st.text_area(
-            'Feed', '''https://36kr.com/feed-newsflash\nhttps://www.zhihu.com/rss\nhttps://rss.shab.fun/cctv/world''', help='https://github.com/shangfr/Feed-Monitoring-Tool')
-
-        feedurls = [clean_url(t)
-                    for t in rss_txt.replace(" ", "").split("\n") if t]
-    kw_txt = st.text_input('关键词', '科技 风险 绿色', help="使用空格分割")
-    contents = st.multiselect('监控内容', ['title', 'summary'], 'title')
-    INTERVAL = st.number_input('时间间隔(s)', 5, step=5)
+    keywords = st.text_input('关键词', '(绿色|低碳|减排|减碳)',
+                             help="使用正则表达式，格式：(关键词1|关键词2)")
+    col1, col2 = st.columns([2, 1])
+    monitoring = col1.multiselect('监控内容', ['标题', '摘要'], ['标题', '摘要'])
+    interval = col2.number_input('自动更新(s)', 10, 36000, 10, step=10)
 
     using_llm = st.toggle('LLM Monitoring', help="使用大模型进行内容监控")
+
     if using_llm:
-        st.success("👇🤖 启动LLM Monitoring [Agent](https://github.com/shangfr/MRKL-AgentBot)")
-        _ = st.text_area('监控需求', '请监控人工智能相关的新闻舆情', help="语言描述监控需求")
+        st.success(
+            "👇🤖 启动LLM Monitoring [Agent](https://github.com/shangfr/MRKL-AgentBot)")
+        prompt = st.text_area('监控需求', '请监控人工智能相关的新闻舆情', help="语言描述监控需求")
+    else:
+        prompt = ''
 
-cola, colb = st.columns([1, 9])
 
-tab0, tab1, tab2 = colb.tabs(["📈 状态", "🗃 详情", "🤖 推送"])
+if 'results' not in st.session_state:
+    st.session_state['results'] = defaultdict(list)
+    st.session_state.run = False
+    st.session_state.task_run = False
 
-with cola:
-    st.markdown('')
-    st.markdown('')
-    st.button('🚗', on_click=start_stop, kwargs={
-              'flag': True}, disabled=st.session_state.run, help="开始")
-    st.button('⛔️', on_click=start_stop, kwargs={
-              'flag': False}, disabled=not st.session_state.run)
-    st.button('🆑', on_click=clear_reset, disabled=st.session_state.run)
-    st.button('🔁', on_click=update_dt, disabled=not st.session_state.run)
 
-with tab0.expander("Stats", expanded=True):
+def run_state(flag):
+    if flag == "start":
+        st.session_state.run = True
+        st.toast('Start!', icon='🚗')
+    elif flag == "stop":
+        st.session_state.run = False
+        st.toast('Stop!', icon='⛔️')
+    elif flag == "reset":
+        st.session_state['results'] = defaultdict(list)
+        st.session_state.run = False
+        st.toast('Reset!', icon='🆑')
+    elif flag == "update":
+        st.toast('Data Update!', icon='🔁')
+
+
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+
+col1.button('🚗 开始', on_click=run_state, kwargs={
+            'flag': "start"}, disabled=st.session_state.run, use_container_width=True, help="开始")
+col2.button('⛔️ 暂停', on_click=run_state, kwargs={
+            'flag': "stop"}, disabled=not st.session_state.run, use_container_width=True)
+col3.button('🆑 重置', on_click=run_state, kwargs={
+            'flag': "reset"}, disabled=st.session_state.run, use_container_width=True)
+col4.button('🔁 更新', on_click=run_state, kwargs={
+            'flag': "update"}, disabled=not st.session_state.run, use_container_width=True)
+
+
+results = st.session_state['results']
+#tab0, tab1, tab2 = st.tabs(["📈 状态", "🗃 数据", "🤖 推送"])
+###############################################################################
+
+with st.expander("📈 状态", expanded=True):
     placeholder0 = st.empty()
     placeholder1 = st.empty()
-    placeholder2 = st.empty()
+ 
+placeholder2 = st.empty()
 
+results = st.session_state['results']
+feeds_num = len(results['uuid_set'])
+if feeds_num == 0:
+    placeholder0.progress(
+        feeds_num % 100, text=f"📝 `{len(urls)}`个数据源，👆🚗 启动后，点击更新🔁按钮查看最新数据\n\n")
+    placeholder1.info(f"**关键词**：{keywords}\n\n**监控区域**：" + "\n".join(monitoring) +
+                      f"\n\n**自动更新间隔**： {str(interval)}秒")
+    placeholder2.info(
+        f"**RSS({len(urls)})**：\n\n> - " + "\n\n> - ".join(urls[-5:]))
+else:
 
-parm_dict = {"feeds": st.session_state['feeds'],
-             "feedurls": feedurls,
-             "keywords": kw_txt,
-             "contents": contents
-             }
-st_show = [placeholder0, placeholder1, placeholder2]
-feeds_num = len(st.session_state['feeds'])
-placeholder0.progress(feeds_num % 100, text=f"📝 匹配到`{feeds_num}`条信息")
-placeholder1.info("**关键词**：" + kw_txt +
-                  "\n\n**监控区域**：" + "\n".join(contents))
-if feedurls:
-    placeholder2.info("**RSS**：\n\n> - " + "\n\n> - ".join(feedurls))
-
-with tab1:
-    if feeds_num > 0:
-        #placeholder3.success("- "+"\n\n- ".join([f['title'] for f in st.session_state['feeds'][-3:]]))
-        df, dfa, srs_max = pd_func(st.session_state['feeds'])
-        with st.expander("网站统计"):
-            st.dataframe(dfa,
-                         column_config={
-                             "web": "Web name",
-                             "title": st.column_config.NumberColumn(
-                                 "Number of news",
-                                 help="Number of news",
-                                 format="%d ⭐",
-                             ),
-                             "match_history": st.column_config.LineChartColumn(
-                                 "Views (past 30 days)", y_min=0, y_max=srs_max
-                             ),
-                         }, use_container_width=True, hide_index=True)
-
-        with st.expander("数据详情"):
-            st.dataframe(df,
-                         column_config={
-                             "link": st.column_config.LinkColumn(
-                                 "links",
-                                 max_chars=100,
-                             )
-                         }, use_container_width=True, hide_index=True)
-        cola.download_button(
-            label="🚀",
-            data=df.to_csv(index=False).encode('utf-8'),
-            file_name='table.csv',
-            mime='text/csv',
-            key="table",
-            help="Download data"
-        )
-
-    else:
-        st.info("👈 启动🚗后，点击更新🔁按钮查看最新数据。")
-
-
-with tab2:
-    from feishu import push_report
-    colx0, colx1, colx2, colx3, colx4, colx5 = st.columns(6)
-    parms = {"title": colx0.toggle("标题", value=True),
-             "summary": colx1.toggle("摘要", value=True),
-             "link": colx2.toggle("链接", value=True),
-             "published": colx3.toggle("日期", value=True),
-             "web": colx4.toggle("网站"),
-             "at_all": colx5.toggle("@ALL")}
-    feeds = st.session_state['feeds']
-    tlt_lst = [t['title'] for t in feeds]
-    if tlt := st.selectbox('选择消息', tlt_lst):
-        info = feeds[tlt_lst.index(tlt)]
-        with st.expander(f"{info['web']} [查看详情]({info['link']})"):
-            st.markdown(f"{info['summary']}", unsafe_allow_html=True)
-
-        if web_hook := st.text_input("推送地址", ""):
-            # Every form must have a submit button.
-            submitted = st.button("发送", type="primary", use_container_width=True)
+    source_num = len(results['source'])
     
-            if submitted:
-                push_report(web_hook, info, parms)
-                st.success("消息发送成功！")
+    match_news = [item for item in results['news'] if item['match']]
+    match_news_num = len(match_news)
+    
+    match_source = [item['source'] for item in match_news]
+    match_source = list(set(match_source))
+    match_source_num = len(match_source)
+    
+
+    ph0 = f"📝 已获取`{feeds_num}`条信息，匹配到`{len(match_news)}`条信息"
+
+    ph1 = f"⏳ `成功获取{source_num}个新闻源，{match_source_num}个匹配源： {'、'.join(match_source)}`"
+    
+    ph2 =  "\n\n".join([f"⭐`{info['source']}` `{info['match']}`\n\n- [{info['title']}]({info['link']})"
+                                for info in match_news[-20:]])
+
+    placeholder0.progress(match_news_num % 100, text=ph0)
+    placeholder1.success(ph1)
+    placeholder2.markdown(ph2)
+
+monitoring_dict = {'标题': 'title', '摘要': 'summary'}
 
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-loop.run_until_complete(fetchfeeds(st.session_state.run, parm_dict, st_show))
+parm_dict = {
+    "keywords": keywords,
+    "monitoring": [monitoring_dict.get(m) for m in monitoring],
+    "prompt": prompt,
+    "results": st.session_state['results']
+}
+
+st_show = [placeholder0, placeholder1, placeholder2]
+st_run = st.session_state["run"]
+
+from utils import display_status,fetch_and_parse
+async def fetch_query_results(urls, run=False, interval=5,st_show=[], **kwargs):
+    print(f"启动--{run}")
+    while run:
+
+        queue = asyncio.Queue()
+        # start the consumer
+        display_task = asyncio.create_task(display_status(st_show, queue))
+        tasks = [fetch_and_parse(url, queue, **kwargs) for url in urls]
+
+        await asyncio.gather(*tasks)
+        await queue.join()
+        display_task.cancel()
+        # 等待任务实际完成（如果它已经开始执行）
+        await display_task
+        
+        await asyncio.sleep(5)
+        print(f"complete--{run}")
+
+
+print(f"task_run---{st.session_state.task_run}")
+print(f"st_run-----{st_run}")
+
+if st.session_state.task_run and st_run:
+    st.stop()
+
+st.session_state.task_run = st_run
+asyncio.run(fetch_query_results(urls, st_run, interval, st_show, **parm_dict))
 st.stop()
+
+
+    
+
